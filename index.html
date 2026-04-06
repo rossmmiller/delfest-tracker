@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Delfest Tracker</title>
+
+<!-- PWA: iOS home screen support -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Delfest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1610">
+<meta name="description" content="Mandolin academy prep tracker for Delfest 2026">
+
+<!-- iOS touch icon (mandolin emoji on brown background) -->
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='36' fill='%238b4513'/><text x='90' y='128' font-size='100' text-anchor='middle'>🎸</text></svg>">
+
+<script>
+// Inline service worker — no separate sw.js file needed for single-file deploy
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    var swCode = [
+      "const CACHE='delfest-v2';",
+      "self.addEventListener('install',e=>{self.skipWaiting();});",
+      "self.addEventListener('activate',e=>{",
+      "  e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));",
+      "  self.clients.claim();",
+      "});",
+      "self.addEventListener('fetch',e=>{",
+      "  e.respondWith(caches.open(CACHE).then(c=>",
+      "    c.match(e.request).then(cached=>{",
+      "      var fresh=fetch(e.request).then(r=>{c.put(e.request,r.clone());return r;}).catch(()=>cached);",
+      "      return cached||fresh;",
+      "    })",
+      "  ));",
+      "});"
+    ].join('');
+    try {
+      var blob = new Blob([swCode], {type:'application/javascript'});
+      var swUrl = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swUrl).catch(function(){});
+    } catch(e) {}
+  });
+}
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #f5f2ec;
+    --surface: #fdfcf9;
+    --surface2: #f0ece3;
+    --border: #d8d0c0;
+    --border-light: #e8e2d8;
+    --text: #1a1610;
+    --text-muted: #6b6050;
+    --text-faint: #a09070;
+    --accent: #8b4513;
+    --accent-light: #f5ebe0;
+    --accent-mid: #c47a3a;
+    --green: #2d6a3f;
+    --green-light: #e8f5ed;
+    --blue: #2a4d7a;
+    --blue-light: #e8f0f8;
+    --gold: #c4860a;
+    --gold-light: #fef8e8;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Libre Baskerville', Georgia, serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ---- HEADER ---- */
+  .site-header {
+    background: var(--text);
+    color: var(--bg);
+    padding: 1.25rem 2rem;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .site-header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .site-header .subtitle {
+    font-size: 13px;
+    opacity: 0.6;
+    font-style: italic;
+  }
+  .countdown-pill {
+    background: var(--accent);
+    color: #fff;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 4px 14px;
+    border-radius: 99px;
+    font-weight: 500;
+  }
+
+  /* ---- NAV TABS ---- */
+  .nav-tabs {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1.5px solid var(--border);
+    padding: 0 2rem;
+    overflow-x: auto;
+    gap: 0;
+  }
+  .nav-tab {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 13px;
+    padding: 12px 18px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-bottom: 2.5px solid transparent;
+    margin-bottom: -1.5px;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+
+  /* ---- MAIN LAYOUT ---- */
+  .main { max-width: 780px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ---- METRICS ROW ---- */
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    box-shadow: var(--shadow);
+  }
+  .metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+  .metric-value { font-size: 28px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .metric-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-style: italic; }
+
+  /* ---- SECTION HEADERS ---- */
+  .section-head {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+    margin: 1.5rem 0 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-head::after { content: ''; flex: 1; height: 1px; background: var(--border-light); }
+
+  /* ---- CARDS ---- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  /* ---- SESSION BLOCKS ---- */
+  .block-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-light);
+    transition: background 0.1s;
+  }
+  .block-row:last-child { border-bottom: none; }
+  .block-row:hover { background: var(--surface2); }
+
+  .check-btn {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 1px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .check-btn:hover { border-color: var(--accent-mid); }
+  .check-btn.done { background: var(--green); border-color: var(--green); }
+  .check-btn.done::after {
+    content: '';
+    display: block;
+    width: 5px; height: 9px;
+    border-right: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    transform: rotate(45deg) translate(-1px,-2px);
+  }
+
+  .block-info { flex: 1; min-width: 0; }
+  .block-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .block-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.5; font-style: italic; }
+  .block-meta { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-faint); margin-top: 5px; }
+
+  /* ---- BADGES ---- */
+  .key-badge {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    padding: 1px 7px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .key-G { background: var(--green-light); color: var(--green); }
+  .key-A { background: var(--blue-light); color: var(--blue); }
+  .key-D { background: var(--gold-light); color: var(--gold); }
+  .key-C { background: var(--accent-light); color: var(--accent); }
+  .key-mixed { background: var(--surface2); color: var(--text-muted); }
+  .key-rest { background: var(--surface2); color: var(--text-faint); }
+
+  .type-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--surface2);
+    color: var(--text-faint);
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  /* ---- NOTE AREA ---- */
+  .note-wrap { padding: 12px 16px; border-top: 1px solid var(--border-light); background: var(--surface2); }
+  .note-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .note-area {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    font-family: 'Libre Baskerville', serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--surface);
+    resize: none;
+    line-height: 1.5;
+  }
+  .note-area:focus { outline: none; border-color: var(--accent-mid); }
+  .save-btn {
+    margin-top: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 5px 14px;
+    font-family: 'Libre Baskerville', serif;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text);
+    transition: all 0.15s;
+  }
+  .save-btn:hover { background: var(--accent-light); border-color: var(--accent-mid); color: var(--accent); }
+
+  /* ---- WEEK FOCUS BOX ---- */
+  .focus-box {
+    background: var(--accent-light);
+    border: 1px solid #e0c8a8;
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .focus-box strong { font-weight: 700; }
+
+  /* ---- CALENDAR ---- */
+  .week-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .week-nav-btn { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); width: 32px; height: 32px; cursor: pointer; font-size: 16px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
+  .week-nav-btn:hover { border-color: var(--accent-mid); color: var(--accent); }
+  .week-nav-label { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--text); }
+  .day-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 10px; }
+  .day-cell {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 8px 4px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--surface);
+    transition: all 0.1s;
+  }
+  .day-cell:hover { border-color: var(--accent-mid); }
+  .day-cell.today { border: 2px solid var(--accent); background: var(--accent-light); }
+  .day-cell.done { background: var(--green-light); border-color: var(--green); }
+  .day-cell.skipped { opacity: 0.4; }
+  .day-cell.future { opacity: 0.5; }
+  .dc-name { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-faint); text-transform: uppercase; }
+  .dc-num { font-size: 14px; font-weight: 700; color: var(--text); margin: 2px 0; }
+  .dc-key { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-muted); }
+  .day-detail { background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 14px 16px; font-size: 13px; line-height: 1.7; }
+  .day-detail-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .day-detail-desc { color: var(--text-muted); font-style: italic; }
+
+  /* ---- REPERTOIRE ---- */
+  .rep-card {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .rep-header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-light); flex-wrap: wrap; }
+  .rep-name { font-size: 14px; font-weight: 700; flex: 1; min-width: 160px; }
+  .stars { display: flex; gap: 3px; }
+  .star { font-size: 17px; cursor: pointer; color: var(--border); transition: color 0.1s; line-height: 1; }
+  .star.lit { color: var(--gold); }
+  .star:hover { color: var(--accent-mid); }
+
+  .links-section { padding: 10px 16px; background: var(--surface2); }
+  .links-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+  .links-row:last-child { margin-bottom: 0; }
+  .links-group-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: 4px; }
+
+  .lesson-link {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--blue);
+    text-decoration: none;
+    padding: 3px 9px;
+    border-radius: 4px;
+    border: 1px solid #bdd0e8;
+    background: var(--blue-light);
+    transition: all 0.1s;
+  }
+  .lesson-link:hover { background: #d5e5f5; border-color: var(--blue); }
+  .lesson-link.sm {
+    color: var(--green);
+    border-color: #aadbbe;
+    background: var(--green-light);
+  }
+  .lesson-link.sm:hover { background: #caebd6; border-color: var(--green); }
+  .lesson-link.fallback {
+    color: var(--text-faint);
+    border-color: var(--border);
+    background: var(--surface);
+  }
+  .lesson-link.fallback:hover { background: var(--surface2); }
+
+  /* ---- STRUM MACHINE TAB ---- */
+  .sm-intro { font-size: 13px; color: var(--text-muted); font-style: italic; margin-bottom: 1rem; line-height: 1.6; }
+  .sm-section-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+  .sm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 1rem; }
+  .sm-tile {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px;
+    box-shadow: var(--shadow);
+  }
+  .sm-tile-name { font-size: 13px; font-weight: 700; line-height: 1.3; }
+  .sm-tile-key { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-faint); }
+  .sm-open-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    color: var(--green); background: var(--green-light);
+    border: 1px solid #aadbbe; border-radius: 4px;
+    padding: 4px 10px; text-decoration: none; white-space: nowrap;
+    transition: all 0.1s; flex-shrink: 0;
+  }
+  .sm-open-btn:hover { background: #caebd6; border-color: var(--green); }
+  .sm-instructions {
+    background: var(--gold-light);
+    border: 1px solid #e8cfa0;
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.7;
+    margin-top: 1rem;
+  }
+  .sm-instructions strong { font-weight: 700; }
+
+  /* ---- TEMPO TAB ---- */
+  .tempo-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border-light); }
+  .tempo-row:last-child { border-bottom: none; }
+  .tempo-week { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); min-width: 80px; }
+  .tempo-week.current { color: var(--accent); font-weight: 500; }
+  .tempo-bar-wrap { flex: 1; height: 5px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+  .tempo-bar-fill { height: 100%; border-radius: 99px; background: var(--accent-mid); transition: width 0.3s; }
+  .tempo-bpm { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--text); min-width: 50px; text-align: right; }
+  .tempo-label { font-size: 11px; color: var(--text-faint); font-style: italic; min-width: 120px; }
+  .tempo-rules {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.8;
+    margin-top: 1rem;
+  }
+
+  /* ---- iOS safe areas ---- */
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  .site-header { padding-top: max(1.25rem, env(safe-area-inset-top)); padding-left: max(1.25rem, env(safe-area-inset-left)); padding-right: max(1.25rem, env(safe-area-inset-right)); }
+  .nav-tabs { padding-left: max(2rem, env(safe-area-inset-left)); }
+  .main { padding-left: max(1.25rem, env(safe-area-inset-left)); padding-right: max(1.25rem, env(safe-area-inset-right)); }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 480px) {
+    .metrics { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .metric-value { font-size: 22px; }
+    .site-header { padding: 1rem; }
+    .main { padding: 1rem 0.75rem 3rem; }
+    .nav-tabs { padding: 0 0.75rem; }
+    .rep-header { flex-wrap: wrap; }
+    .tempo-label { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div>
+    <h1>Delfest Prep Tracker</h1>
+    <div class="subtitle">Mandolin Academy · May 17, 2026</div>
+  </div>
+  <div class="countdown-pill" id="countdown-pill">— days</div>
+</header>
+
+<nav class="nav-tabs">
+  <button class="nav-tab active" onclick="showTab('today')">Today</button>
+  <button class="nav-tab" onclick="showTab('calendar')">Calendar</button>
+  <button class="nav-tab" onclick="showTab('repertoire')">Repertoire &amp; Lessons</button>
+  <button class="nav-tab" onclick="showTab('strummachine')">Strum Machine</button>
+  <button class="nav-tab" onclick="showTab('tempo')">Tempo</button>
+</nav>
+
+<main class="main">
+
+  <!-- ===================== TODAY ===================== -->
+  <div class="tab-panel active" id="panel-today">
+
+    <div class="metrics">
+      <div class="metric-card">
+        <div class="metric-label">Days left</div>
+        <div class="metric-value" id="days-left">—</div>
+        <div class="metric-sub">until Delfest</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Today's key</div>
+        <div class="metric-value" id="today-key" style="font-size:22px;margin-top:2px;">—</div>
+        <div class="metric-sub" id="today-dow">—</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Blocks done</div>
+        <div class="metric-value" id="blocks-done">0/6</div>
+        <div class="metric-sub">today</div>
+      </div>
+    </div>
+
+    <div class="focus-box" id="focus-box">Loading today's focus...</div>
+
+    <div class="section-head">Session A — Rhythm (20 min)</div>
+    <div class="card">
+      <div class="block-row">
+        <button class="check-btn" id="cb-a1" onclick="toggle('a1')"></button>
+        <div class="block-info">
+          <div class="block-title">Chop drill <span class="key-badge" id="key-badge">A</span></div>
+          <div class="block-desc" id="chop-desc">Chop the day's key pattern at target bpm. Feel the backbeat.</div>
+          <div class="block-meta">5 min · metronome on</div>
+        </div>
+      </div>
+      <div class="block-row">
+        <button class="check-btn" id="cb-a2" onclick="toggle('a2')"></button>
+        <div class="block-info">
+          <div class="block-title">Full-form backup</div>
+          <div class="block-desc" id="today-desc">Play backup all the way through the day's piece. Do not stop.</div>
+          <div class="block-meta">10 min · no stopping</div>
+        </div>
+      </div>
+      <div class="block-row">
+        <button class="check-btn" id="cb-a3" onclick="toggle('a3')"></button>
+        <div class="block-info">
+          <div class="block-title">Jam simulation</div>
+          <div class="block-desc">Say the key aloud. Count off. Backup 2 choruses → simple break → finish clean.</div>
+          <div class="block-meta">5 min · count yourself off</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-head">Session B — Melody &amp; breaks (20 min)</div>
+    <div class="card">
+      <div class="block-row">
+        <button class="check-btn" id="cb-b1" onclick="toggle('b1')"></button>
+        <div class="block-info">
+          <div class="block-title">Melody skeleton</div>
+          <div class="block-desc">Bare melody, slow and clean. No ornamentation. Just the notes.</div>
+          <div class="block-meta">5 min · slow is fine</div>
+        </div>
+      </div>
+      <div class="block-row">
+        <button class="check-btn" id="cb-b2" onclick="toggle('b2')"></button>
+        <div class="block-info">
+          <div class="block-title">Break building</div>
+          <div class="block-desc">Build or refine one 8-bar break from the vocal melody. Melody-based only.</div>
+          <div class="block-meta">10 min · keep it simple</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-head">End of session</div>
+    <div class="card">
+      <div class="block-row">
+        <button class="check-btn" id="cb-c1" onclick="toggle('c1')"></button>
+        <div class="block-info">
+          <div class="block-title">Record &amp; review</div>
+          <div class="block-desc">Record 60 seconds. Listen back immediately. Write one sentence below.</div>
+          <div class="block-meta">3 min · one sentence only</div>
+        </div>
+      </div>
+      <div class="note-wrap">
+        <div class="note-label">Tomorrow I need to fix:</div>
+        <textarea class="note-area" id="daily-note" rows="2" placeholder="Write one thing only..."></textarea>
+        <button class="save-btn" onclick="saveNote()">Save note</button>
+      </div>
+    </div>
+
+    <div class="section-head">Data backup</div>
+    <div class="card">
+      <div class="block-row" style="flex-wrap:wrap;gap:8px;">
+        <div class="block-info">
+          <div class="block-title" style="font-size:13px;">Export your notes &amp; progress</div>
+          <div class="block-desc">Save a backup file in case you clear your browser. Import it anytime to restore.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;align-items:center;">
+          <button class="save-btn" onclick="exportData()">Export</button>
+          <label class="save-btn" style="cursor:pointer;margin-top:0;">Import<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end panel-today -->
+  <div class="tab-panel" id="panel-calendar">
+    <div class="week-nav">
+      <button class="week-nav-btn" onclick="calWeek(-1)">&#8592;</button>
+      <div class="week-nav-label" id="cal-week-label">Week 1</div>
+      <button class="week-nav-btn" onclick="calWeek(1)">&#8594;</button>
+    </div>
+    <div class="day-grid" id="cal-grid"></div>
+    <div class="day-detail" id="day-detail">
+      <div class="day-detail-title">Select a day</div>
+      <div class="day-detail-desc">Tap any day in the grid above to see what's scheduled.</div>
+    </div>
+  </div>
+
+  <!-- ===================== REPERTOIRE ===================== -->
+  <div class="tab-panel" id="panel-repertoire">
+    <div class="section-head">Core repertoire — 8 pieces</div>
+    <div id="rep-core"></div>
+    <div class="section-head">Stretch pieces (week 4+)</div>
+    <div id="rep-stretch"></div>
+  </div>
+
+  <!-- ===================== STRUM MACHINE ===================== -->
+  <div class="tab-panel" id="panel-strummachine">
+    <p class="sm-intro">
+      Use Strum Machine as your practice band. Open any tune, set it to your target bpm, and practice backup, breaks, and transitions against it.
+      The links below search Strum Machine's library for each piece — once you find it, save it to a new list called <strong>"Delfest 2026"</strong> so everything is in one place.
+    </p>
+
+    <div class="sm-section-title">Core pieces</div>
+    <div class="sm-grid" id="sm-core-grid"></div>
+
+    <div class="sm-section-title">Stretch pieces</div>
+    <div class="sm-grid" id="sm-stretch-grid"></div>
+
+    <div class="sm-instructions">
+      <strong>Setting up your Delfest 2026 list:</strong><br>
+      1. Click any tune link below — it opens Strum Machine to that song.<br>
+      2. In Strum Machine, click the three-dot menu on the tune and choose <em>Add to list</em>.<br>
+      3. Create a new list named <strong>Delfest 2026</strong> the first time, then add subsequent tunes to it.<br>
+      4. Your list will sync across all your devices automatically.<br><br>
+      <strong>Weekly tempo targets for Strum Machine:</strong><br>
+      Weeks 1–2: 65 bpm &nbsp;·&nbsp; Week 3: 72 bpm &nbsp;·&nbsp; Week 4: 82 bpm &nbsp;·&nbsp; Week 5: 92 bpm &nbsp;·&nbsp; Week 6: 100 bpm
+    </div>
+  </div>
+
+  <!-- ===================== TEMPO ===================== -->
+  <div class="tab-panel" id="panel-tempo">
+    <div class="section-head">Weekly tempo targets</div>
+    <div class="card" style="padding:4px 16px;">
+      <div id="tempo-rows"></div>
+    </div>
+    <div class="tempo-rules">
+      <strong>The rules:</strong><br>
+      · Three clean reps before raising the tempo. Never just run full-speed sloppy.<br>
+      · Two bars clean → rest → repeat beats 32 bars sloppy every time.<br>
+      · Most Delfest jams run <strong>90–110 bpm</strong>. Chop at 90 before worrying about breaks at 100.<br>
+      · Auto-speedup in Strum Machine is perfect for this — set it to +2 bpm per rep.
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ===== DATA =====
+const START  = new Date('2026-04-06');
+const DELFEST = new Date('2026-05-17');
+const TODAY  = new Date(); TODAY.setHours(0,0,0,0);
+
+const DOW_KEYS  = ['G','A','A','D','mixed','mixed','rest'];
+const DOW_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+
+const CHOPS = { G:'G–C–D', A:'A–D–E', D:'D–G–A', C:'C–F–G', mixed:'G–C–D and A–D–E', rest:'any key you like' };
+
+// Chop drill instructions by [week][dow]. Weeks 1-2 = I-IV-V loop. Week 3 = loop + turnaround. Weeks 4-6 = full tune form.
+const CHOP_DRILL = [
+  // Week 1 — pure I-IV-V loops, no tune form yet
+  ['Loop G–C–D over and over, metronome at 65 bpm. No tune yet — just lock in the backbeat feel in G.',
+   'Loop G–C–D, 65 bpm. Focus: chop lands exactly on 2 and 4. Mute is as important as the chop.',
+   'Loop A–D–E, 65 bpm. Same goal: clean backbeat, no tune form yet.',
+   'Loop A–D–E, 65 bpm. Try closing your eyes and feeling the pulse.',
+   'Loop D–G–A, 65 bpm. New key — take it slow.',
+   'Loop G–C–D then A–D–E back to back. Just grooves, no forms.',
+   'Rest day — no chop drill. Light listening only.'],
+  // Week 2 — still I-IV-V loops, starting to feel the key
+  ['Loop G–C–D, 68 bpm. Add a tiny accent on beat 1 so you hear the downbeat clearly.',
+   'Loop G–C–D, 68 bpm. Try singing the melody of Blue Ridge over it while you chop.',
+   'Loop A–D–E, 68 bpm. Sing Old Home Place over your own chop.',
+   'Loop A–D–E, 68 bpm. Then D–G–A. Smooth key switch between the two.',
+   'Loop C–F–G, 68 bpm. This is your C key feel for 9 Pound Hammer.',
+   'Rotate: 4 bars G–C–D → 4 bars A–D–E → 4 bars D–G–A. No stopping between keys.',
+   'Rest day — no chop drill.'],
+  // Week 3 — loop PLUS the tune's actual turnaround
+  ['Chop G–C–D loop, then add the turnaround of Blue Ridge Cabin Home: G → D → G. Feel where the verse ends and turns back.',
+   'Chop the full chord form of Old Home Place (A): A–A–D–A–E–A. Slow, with the turnaround. 70 bpm.',
+   'Chop full form of Salt Creek (A): A–A–A–A–D–D–A–E–A. Two full passes through. 70 bpm.',
+   'Chop full form of Blackberry Blossom (G): G–C–G–D–G. Then Whiskey Before Breakfast (D): D–A–D–G–D–A–D. 70 bpm.',
+   'Chop full form of 9 Pound Hammer (C): C–F–C–G–C. Count out loud through the changes.',
+   'Rotate through three tunes: Blue Ridge chop form → Salt Creek chop form → 9 Pound Hammer chop form. No stopping.',
+   'Rest day — no chop drill.'],
+  // Week 4 — full tune chord forms, metronome 80-85
+  ['Chop Blue Ridge Cabin Home full chord form, 80 bpm. Two passes. Every chord change must land in time.',
+   'Chop Old Home Place full form, 80 bpm. Then Rollin\' in My Sweet Baby\'s Arms. Back to back.',
+   'Chop Salt Creek full form, 82 bpm. Then Bill Cheatham. Both tunes, no stopping between.',
+   'Chop Blackberry Blossom full form, 82 bpm. Then Whiskey Before Breakfast. Both tunes.',
+   'Chop 9 Pound Hammer full form, 80 bpm. Then chop the form of Dark Hollow (A) if you know it.',
+   'Chop three tunes back to back: Blue Ridge → Old Home Place → Salt Creek. Say the key before each.',
+   'Rest day — no chop drill.'],
+  // Week 5 — full forms at jam tempo
+  ['Chop Blue Ridge Cabin Home, 90 bpm. No hesitation on the turnaround. Three clean passes.',
+   'Chop Old Home Place at 90, then Rollin\' at 90. Feel the difference in form between them.',
+   'Chop Salt Creek at 90–92 bpm. Then Bill Cheatham. Three clean passes of each.',
+   'Chop Blackberry Blossom at 90, then Whiskey Before Breakfast. Groove is everything now.',
+   'Chop 9 Pound Hammer at 90 bpm. Then chop Red Haired Boy (A) if you\'re adding it.',
+   'Full mock jam chop warm-up: Blue Ridge → Old Home Place → Salt Creek → Blackberry Blossom → 9 Pound Hammer. All at 90+ bpm.',
+   'Rest day — no chop drill.'],
+  // Week 6 — consolidate, no new material
+  ['Chop your full core set in order, 95–100 bpm. This is the warm-up. Get loose, not tense.',
+   'Chop only the two tunes you struggled with on Monday. Slow them down 10 bpm and rebuild.',
+   'Chop the forms of all four songs: Blue Ridge → Rollin\' → Old Home Place → 9 Pound Hammer. 90 bpm.',
+   'Chop the forms of all four tunes: Salt Creek → Bill Cheatham → Blackberry Blossom → Whiskey. 90 bpm.',
+   'Chop warm-up: one pass through every core piece at 85 bpm. Relaxed. No pressure.',
+   'Short chop warm-up only — 5 min, 80 bpm, G and A only. Then put the metronome away.',
+   'Rest day — no chop drill. Warm hands, quiet mind.']
+];
+
+const SCHEDULE = [
+  { label:'Week 1: Foundation', goal:'Map keys, learn forms, stop the overwhelm.', days:[
+    { focus:'Setup day', detail:'Make your checklist. Build 3 playlists by key. Record a rough baseline of Blue Ridge Cabin Home and Salt Creek — just to have a reference point.', key:'G' },
+    { focus:'G song — chord flow', detail:'Blue Ridge Cabin Home: know the chord flow and hum the melody all the way through. No speed work at all.', key:'G' },
+    { focus:'A songs — know the form', detail:"Old Home Place + Rollin' in My Sweet Baby's Arms: know where the form turns around. Count out loud.", key:'A' },
+    { focus:'A tunes — A part melody only', detail:'Salt Creek + Bill Cheatham: just the A part, very simple, very clean. Do not rush.', key:'A' },
+    { focus:'D tunes — first pass', detail:'Whiskey Before Breakfast + Blackberry Blossom: melody skeleton only. First time through is fine.', key:'D' },
+    { focus:'Mini jam circuit', detail:"Blue Ridge → Old Home Place → Salt Creek → Blackberry Blossom. Don't stop between pieces. This is your first circuit.", key:'mixed' },
+    { focus:'Light day — listen only', detail:'Hum melodies. Review chord changes. No guilt, no ambition. 20 min max.', key:'rest' }
+  ]},
+  { label:'Week 2: Lock forms', goal:'Full melody on all core tunes. Backup through full song forms without getting lost.', days:[
+    { focus:'G backup — full form', detail:"Blue Ridge + Rollin': play backup all the way through each song without losing the form.", key:'G' },
+    { focus:'A forms + kickoff', detail:"Old Home Place + Rollin': backup in A. Add one simple kickoff attempt on each song.", key:'A' },
+    { focus:'A tunes — full A and B parts', detail:'Salt Creek + Bill Cheatham: full A and B parts as bare melody. Still no decoration.', key:'A' },
+    { focus:'D tunes — full A and B parts', detail:'Whiskey Before Breakfast + Blackberry Blossom: full A and B parts as bare melody.', key:'D' },
+    { focus:'Add 9 Pound Hammer', detail:'9 Pound Hammer (C): chord flow only. No lead yet. Just know the changes.', key:'mixed' },
+    { focus:'Mock jam 1', detail:'20 min straight: Blue Ridge → Salt Creek → Old Home Place → Blackberry Blossom → 9 Pound Hammer. Simple backup and melody only.', key:'mixed' },
+    { focus:'Listen back', detail:'Listen to recordings from the week. Write down your three recurring problems only. Nothing else.', key:'rest' }
+  ]},
+  { label:'Week 3: Build breaks + metronome', goal:'Start metronome at 70 bpm. Build simple 8-bar breaks from vocal melodies.', days:[
+    { focus:'G breaks', detail:'Blue Ridge Cabin Home: build one 8-bar break from the vocal melody. Keep it simple — just the melody notes.', key:'G' },
+    { focus:'A breaks', detail:"Old Home Place: build one 8-bar break from the vocal melody. Rollin': backup plus clean ending.", key:'A' },
+    { focus:'A tune breaks', detail:'Salt Creek + Bill Cheatham: simple break, A part only. Metronome at 70 bpm.', key:'A' },
+    { focus:'D tune breaks', detail:'Blackberry Blossom + Whiskey: simple break, A part only. Metronome at 70 bpm.', key:'D' },
+    { focus:'9 Pound Hammer break', detail:'9 Pound Hammer: chord form plus one simple vocal-melody break in C.', key:'mixed' },
+    { focus:'Stretch day', detail:'Introduce Dark Hollow or Red Haired Boy. Melody skeleton only. Do not let it steal time from core pieces.', key:'mixed' },
+    { focus:'Confidence day', detail:'Play all 8 core pieces once each, first 30–60 seconds only. Confidence day — not a grind day.', key:'rest' }
+  ]},
+  { label:'Week 4: Transitions', goal:'Backup → break → backup. Raise metronome to 80–85 bpm.', days:[
+    { focus:'G song circuit', detail:'Blue Ridge + Rollin: 4 bars backup → 8 bars break → back to backup. Practice the transitions, not the speed.', key:'G' },
+    { focus:'A song circuit', detail:'Old Home Place + Rollin: same structure in A. Metronome at 80.', key:'A' },
+    { focus:'A tune circuit', detail:'Salt Creek + Bill Cheatham: melody → simplified break → chop quietly behind imagined lead.', key:'A' },
+    { focus:'D tune circuit', detail:'Blackberry Blossom + Whiskey: same structure. Metronome at 80.', key:'D' },
+    { focus:'9 Pound Hammer transitions', detail:"9 Pound Hammer transitions. Add Dark Hollow as a stretch song if energy's good.", key:'mixed' },
+    { focus:'Mock jam 2', detail:'30 min no stopping. Count each piece off. Say the key out loud before starting. Play along with Strum Machine if possible.', key:'mixed' },
+    { focus:'Rest', detail:'Listen to Delfest-style material. No new learning today.', key:'rest' }
+  ]},
+  { label:'Week 5: Tempo', goal:'Speed only after cleanliness. Target 90–95 bpm.', days:[
+    { focus:'G tempo bursts', detail:'Blue Ridge + Rollin: two bars clean, rest, repeat. Never run full-speed sloppy. Raise after three clean reps.', key:'G' },
+    { focus:'A tempo bursts', detail:'Old Home Place + Rollin: same burst work in A. Raise tempo only after three clean reps.', key:'A' },
+    { focus:'A tunes speed work', detail:'Salt Creek + Bill Cheatham: target 90 bpm. Raise only after three clean reps.', key:'A' },
+    { focus:'D tunes speed work', detail:'Blackberry Blossom + Whiskey: same rule. Feel the groove, not just the notes.', key:'D' },
+    { focus:'9 Pound Hammer + Red Haired Boy', detail:'Polish 9 Pound Hammer at tempo. Add Red Haired Boy only if the week has gone well.', key:'mixed' },
+    { focus:'Mock jam 3', detail:"Blue Ridge → Old Home Place → Salt Creek → Bill Cheatham → 9 Pound Hammer → Blackberry Blossom → Rollin'. Full run at tempo.", key:'mixed' },
+    { focus:'Short review', detail:'Light review. No pressure. Listen to your Week 1 baseline recording and notice how far you have come.', key:'rest' }
+  ]},
+  { label:'Week 6: Performance readiness', goal:'Consolidate. Do not try to improve. Taper the last two days.', days:[
+    { focus:'Full core set run', detail:'No stopping. Notice weak transitions — do not fix them today. Just observe.', key:'G' },
+    { focus:'Repair day', detail:'Fix the three worst trouble spots from Monday. Only those three. Nothing else.', key:'A' },
+    { focus:'Songs only', detail:'Blue Ridge → Rollin → Old Home Place → 9 Pound Hammer. Clean and confident.', key:'A' },
+    { focus:'Tunes only', detail:'Salt Creek → Bill Cheatham → Blackberry Blossom → Whiskey. Trust the work you have done.', key:'D' },
+    { focus:'Mock academy day', detail:'Morning: 20 min chop and keys. Afternoon: songs set. Evening: tunes set. Keep it moving.', key:'mixed' },
+    { focus:'Taper', detail:'30 min only. No hard metronome. No new material. End wanting more. You are ready.', key:'mixed' },
+    { focus:'Delfest eve — rest', detail:'Warm up 10–15 min only. Play familiar material. Do not test yourself. Trust the work.', key:'rest' }
+  ]}
+];
+
+const REPERTOIRE = [
+  { name:'Blue Ridge Cabin Home', key:'G', type:'song',
+    links:[
+      { label:'MandoLessons — Songs', url:'https://www.mandolessons.com/lessons/songs/', cls:'lesson' },
+      { label:'YouTube search', url:'https://www.youtube.com/results?search_query=blue+ridge+cabin+home+mandolin+lesson', cls:'fallback' },
+    ],
+    sm: 'Blue+Ridge+Cabin+Home'
+  },
+  { name:"Old Home Place", key:'A', type:'song',
+    links:[
+      { label:'MandoLessons — Songs', url:'https://www.mandolessons.com/lessons/songs/', cls:'lesson' },
+      { label:'Mike Hedding lessons', url:'https://mikeheddingmusic.com/browse-lessons/', cls:'lesson' },
+      { label:'YouTube search', url:'https://www.youtube.com/results?search_query=old+home+place+mandolin+lesson', cls:'fallback' },
+    ],
+    sm: 'Old+Home+Place'
+  },
+  { name:"Rollin' in My Sweet Baby's Arms", key:'A', type:'song',
+    links:[
+      { label:'MandoLessons — Songs', url:'https://www.mandolessons.com/lessons/songs/', cls:'lesson' },
+      { label:'Mike Hedding lessons', url:'https://mikeheddingmusic.com/browse-lessons/', cls:'lesson' },
+      { label:'YouTube search', url:"https://www.youtube.com/results?search_query=rollin+sweet+baby+arms+mandolin+lesson", cls:'fallback' },
+    ],
+    sm: "Rollin'+In+My+Sweet+Baby%27s+Arms"
+  },
+  { name:'9 Pound Hammer', key:'C', type:'song',
+    links:[
+      { label:'MandoLessons — Songs', url:'https://www.mandolessons.com/lessons/songs/', cls:'lesson' },
+      { label:'Mando Mike lessons', url:'https://www.mandomike.com/', cls:'lesson' },
+      { label:'YouTube search', url:'https://www.youtube.com/results?search_query=nine+pound+hammer+mandolin+lesson', cls:'fallback' },
+    ],
+    sm: 'Nine+Pound+Hammer'
+  },
+  { name:'Salt Creek', key:'A', type:'tune',
+    links:[
+      { label:'MandoLessons — Salt Creek', url:'https://www.mandolessons.com/lessons/fiddle-tunes/salt-creek', cls:'lesson' },
+      { label:'Simple to Complex', url:'https://www.mandolessons.com/salt-creek-simple-to-complex/', cls:'lesson' },
+      { label:'Play Along Jam', url:'https://www.mandolessons.com/salt-creek-play-along-jam/', cls:'lesson' },
+    ],
+    sm: 'Salt+Creek'
+  },
+  { name:'Bill Cheatham', key:'A', type:'tune',
+    links:[
+      { label:'MandoLessons — Bill Cheatham', url:'https://www.mandolessons.com/lessons/fiddle-tunes/bill-cheatham/', cls:'lesson' },
+      { label:'Simple to Complex', url:'https://www.mandolessons.com/lessons/fiddle-tunes/bill-cheatham-simple-to-complex/', cls:'lesson' },
+      { label:'Play Along Jam', url:'https://www.mandolessons.com/lessons/fiddle-tunes/bill-cheatham-play-along-jam/', cls:'lesson' },
+    ],
+    sm: 'Bill+Cheatham'
+  },
+  { name:'Blackberry Blossom', key:'G', type:'tune',
+    links:[
+      { label:'MandoLessons — Blackberry Blossom', url:'https://www.mandolessons.com/lessons/fiddle-tunes/blackberry-blossom/', cls:'lesson' },
+      { label:'Simple to Complex', url:'https://www.mandolessons.com/lessons/fiddle-tunes/blackberry-blossom-simple-to-complex/', cls:'lesson' },
+      { label:'Play Along Jam', url:'https://www.mandolessons.com/lessons/fiddle-tunes/blackberry-blossom-play-along-jam/', cls:'lesson' },
+    ],
+    sm: 'Blackberry+Blossom'
+  },
+  { name:'Whiskey Before Breakfast', key:'D', type:'tune',
+    links:[
+      { label:'MandoLessons — Whiskey Before Breakfast', url:'https://www.mandolessons.com/lessons/fiddle-tunes/whiskey-before-breakfast/', cls:'lesson' },
+      { label:'Simple to Complex', url:'https://www.mandolessons.com/lessons/fiddle-tunes/whiskey-before-breakfast-simple-to-complex/', cls:'lesson' },
+      { label:'Play Along Jam', url:'https://www.mandolessons.com/lessons/fiddle-tunes/whiskey-before-breakfast-play-along-jam/', cls:'lesson' },
+    ],
+    sm: 'Whiskey+Before+Breakfast'
+  }
+];
+
+const STRETCH = [
+  { name:'Dark Hollow', key:'A', type:'song',
+    links:[
+      { label:'MandoLessons — Songs', url:'https://www.mandolessons.com/lessons/songs/', cls:'lesson' },
+      { label:'YouTube search', url:'https://www.youtube.com/results?search_query=dark+hollow+mandolin+lesson', cls:'fallback' },
+    ],
+    sm: 'Dark+Hollow'
+  },
+  { name:"I'll Fly Away", key:'G', type:'song',
+    links:[
+      { label:'MandoLessons — Songs', url:'https://www.mandolessons.com/lessons/songs/', cls:'lesson' },
+      { label:'Mando Mike lessons', url:'https://www.mandomike.com/', cls:'lesson' },
+      { label:'YouTube search', url:"https://www.youtube.com/results?search_query=i'll+fly+away+mandolin+lesson", cls:'fallback' },
+    ],
+    sm: "I'll+Fly+Away"
+  },
+  { name:'Red Haired Boy', key:'A', type:'tune',
+    links:[
+      { label:'MandoLessons — Red Haired Boy', url:'https://www.mandolessons.com/lessons/fiddle-tunes/red-haired-boy/', cls:'lesson' },
+      { label:'Simple to Complex', url:'https://www.mandolessons.com/lessons/fiddle-tunes/red-haired-boy-simple-to-complex/', cls:'lesson' },
+      { label:'Play Along Jam', url:'https://www.mandolessons.com/lessons/fiddle-tunes/red-haired-boy-play-along-jam/', cls:'lesson' },
+    ],
+    sm: 'Red+Haired+Boy'
+  },
+  { name:'Cherokee Shuffle', key:'A', type:'tune',
+    links:[
+      { label:'MandoLessons — Cherokee Shuffle', url:'https://www.mandolessons.com/lessons/fiddle-tunes/cherokee-shuffle/', cls:'lesson' },
+      { label:'Play Along Jam', url:'https://www.mandolessons.com/lessons/fiddle-tunes/cherokee-shuffle-play-along-jam/', cls:'lesson' },
+    ],
+    sm: 'Cherokee+Shuffle'
+  }
+];
+
+const TEMPOS = [
+  { week:'Weeks 1–2', bpm:65, label:'Slow and clean' },
+  { week:'Week 3',   bpm:72, label:'Building melody' },
+  { week:'Week 4',   bpm:82, label:'Transitions' },
+  { week:'Week 5',   bpm:92, label:'Approaching jam' },
+  { week:'Week 6',   bpm:100, label:'Jam ready' },
+  { week:'Delfest',  bpm:105, label:'Target speed' },
+];
+
+// ===== STATE =====
+let state = {};
+try { state = JSON.parse(localStorage.getItem('delfest2026') || '{}'); } catch(e) {}
+if (!state.blocks)  state.blocks = {};
+if (!state.ratings) state.ratings = {};
+if (!state.notes)   state.notes = {};
+let calWeekOffset = 0;
+const save = () => { try { localStorage.setItem('delfest2026', JSON.stringify(state)); } catch(e) {} };
+
+// ===== HELPERS =====
+function daysSince(d) { return Math.floor((d - START) / 86400000); }
+function getInfo(d) {
+  const n = daysSince(d);
+  if (n < 0 || n >= 42) return null;
+  const wk = Math.floor(n/7), dy = n%7;
+  return { wk, dy, data: SCHEDULE[wk].days[dy], week: SCHEDULE[wk] };
+}
+function getWeekNum() { return Math.max(0, Math.min(5, Math.floor(daysSince(TODAY)/7))); }
+function dowIndex(d) { return (d.getDay() + 6) % 7; } // Mon=0
+
+// ===== TODAY =====
+function updateToday() {
+  const diff = Math.ceil((DELFEST - TODAY) / 86400000);
+  document.getElementById('days-left').textContent = Math.max(0, diff);
+  document.getElementById('countdown-pill').textContent = Math.max(0, diff) + ' days';
+
+  const dow = dowIndex(TODAY);
+  const key = DOW_KEYS[dow];
+  document.getElementById('today-key').textContent = key;
+  document.getElementById('today-dow').textContent = DOW_NAMES[dow];
+
+  const kb = document.getElementById('key-badge');
+  kb.textContent = key;
+  kb.className = 'key-badge key-' + key;
+
+  const info0 = getInfo(TODAY);
+  const chopText = info0
+    ? CHOP_DRILL[info0.wk][info0.dy]
+    : `Loop ${CHOPS[key]} pattern, metronome at 65 bpm. Backbeat on 2 and 4.`;
+  document.getElementById('chop-desc').textContent = chopText;
+
+  const info = info0;
+  if (info) {
+    document.getElementById('today-desc').textContent = info.data.detail;
+    document.getElementById('focus-box').innerHTML =
+      `<strong>${info.week.label}</strong> &mdash; ${info.week.goal}<br>` +
+      `<strong>Today:</strong> ${info.data.focus} &mdash; <em>${info.data.detail}</em>`;
+
+    const dkey = `${info.wk}-${info.dy}`;
+    const done = ['a1','a2','a3','b1','b2','c1'].filter(b => state.blocks[dkey+'-'+b]).length;
+    document.getElementById('blocks-done').textContent = done + '/6';
+
+    ['a1','a2','a3','b1','b2','c1'].forEach(b => {
+      const el = document.getElementById('cb-'+b);
+      if (el) el.className = 'check-btn' + (state.blocks[dkey+'-'+b] ? ' done' : '');
+    });
+    document.getElementById('daily-note').value = state.notes[dkey] || '';
+  }
+}
+
+function toggle(b) {
+  const info = getInfo(TODAY); if (!info) return;
+  const k = `${info.wk}-${info.dy}-${b}`;
+  state.blocks[k] = !state.blocks[k];
+  save(); updateToday();
+}
+
+function saveNote() {
+  const info = getInfo(TODAY); if (!info) return;
+  state.notes[`${info.wk}-${info.dy}`] = document.getElementById('daily-note').value;
+  save();
+  const btn = document.querySelector('.save-btn');
+  btn.textContent = 'Saved ✓';
+  setTimeout(() => btn.textContent = 'Save note', 1600);
+}
+
+// ===== TABS =====
+function showTab(id) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  const tabs = ['today','calendar','repertoire','strummachine','tempo'];
+  document.querySelectorAll('.nav-tab')[tabs.indexOf(id)].classList.add('active');
+  if (id === 'calendar') renderCalendar();
+  if (id === 'repertoire') renderRepertoire();
+  if (id === 'strummachine') renderSM();
+  if (id === 'tempo') renderTempo();
+}
+
+// ===== CALENDAR =====
+function renderCalendar() {
+  const wk = Math.max(0, Math.min(5, calWeekOffset));
+  document.getElementById('cal-week-label').textContent = SCHEDULE[wk].label;
+  const grid = document.getElementById('cal-grid'); grid.innerHTML = '';
+  const ws = new Date(START); ws.setDate(ws.getDate() + wk * 7);
+  const names = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  for (let d = 0; d < 7; d++) {
+    const date = new Date(ws); date.setDate(date.getDate() + d);
+    const info = getInfo(date);
+    const isToday = date.getTime() === TODAY.getTime();
+    const isPast = date < TODAY, isFuture = date > TODAY;
+    const dkey = info ? `${info.wk}-${info.dy}` : '';
+    const anyDone = dkey && ['a1','a2','a3','b1','b2','c1'].some(b => state.blocks[dkey+'-'+b]);
+    const cell = document.createElement('div');
+    cell.className = 'day-cell' + (isToday ? ' today' : isPast && anyDone ? ' done' : isPast ? ' skipped' : ' future');
+    cell.innerHTML = `<div class="dc-name">${names[d]}</div><div class="dc-num">${date.getDate()}</div><div class="dc-key">${info?.data?.key||''}</div>`;
+    if (info) {
+      cell.onclick = () => {
+        document.getElementById('day-detail').innerHTML =
+          `<div class="day-detail-title">${info.data.focus}</div><div class="day-detail-desc">${info.data.detail}</div>`;
+      };
+    }
+    grid.appendChild(cell);
+  }
+}
+function calWeek(d) { calWeekOffset = Math.max(0, Math.min(5, calWeekOffset + d)); renderCalendar(); }
+
+// ===== REPERTOIRE =====
+function makeRepCard(t) {
+  const rating = state.ratings[t.name] || 0;
+  const bCls = 'key-' + t.key;
+  const card = document.createElement('div'); card.className = 'rep-card';
+
+  // header
+  const hdr = document.createElement('div'); hdr.className = 'rep-header';
+  const nm = document.createElement('div'); nm.className = 'rep-name';
+  nm.innerHTML = `${t.name}<span class="key-badge ${bCls}">${t.key}</span><span class="type-badge">${t.type}</span>`;
+  hdr.appendChild(nm);
+  const stars = document.createElement('div'); stars.className = 'stars';
+  for (let s = 1; s <= 5; s++) {
+    const star = document.createElement('span');
+    star.className = 'star' + (s <= rating ? ' lit' : '');
+    star.textContent = '★';
+    star.onclick = () => { state.ratings[t.name] = s; save(); renderRepertoire(); };
+    stars.appendChild(star);
+  }
+  hdr.appendChild(stars); card.appendChild(hdr);
+
+  // links
+  const ls = document.createElement('div'); ls.className = 'links-section';
+
+  if (t.links.length) {
+    const gl = document.createElement('div'); gl.className = 'links-group-label'; gl.textContent = 'Lessons';
+    ls.appendChild(gl);
+    const lr = document.createElement('div'); lr.className = 'links-row';
+    t.links.forEach(lk => {
+      const a = document.createElement('a');
+      a.className = 'lesson-link' + (lk.cls === 'fallback' ? ' fallback' : '');
+      a.href = lk.url; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = lk.label;
+      lr.appendChild(a);
+    });
+    ls.appendChild(lr);
+  }
+
+  if (t.sm) {
+    const gl2 = document.createElement('div'); gl2.className = 'links-group-label'; gl2.style.marginTop = '8px'; gl2.textContent = 'Strum Machine';
+    ls.appendChild(gl2);
+    const sr = document.createElement('div'); sr.className = 'links-row';
+    const smUrl = `https://strummachine.com/songs?search=${t.sm}`;
+    const sa = document.createElement('a');
+    sa.className = 'lesson-link sm';
+    sa.href = smUrl; sa.target = '_blank'; sa.rel = 'noopener';
+    sa.textContent = 'Open in Strum Machine';
+    sr.appendChild(sa); ls.appendChild(sr);
+  }
+
+  card.appendChild(ls);
+  return card;
+}
+
+function renderRepertoire() {
+  const core = document.getElementById('rep-core'); core.innerHTML = '';
+  REPERTOIRE.forEach(t => core.appendChild(makeRepCard(t)));
+  const stretch = document.getElementById('rep-stretch'); stretch.innerHTML = '';
+  STRETCH.forEach(t => stretch.appendChild(makeRepCard(t)));
+}
+
+// ===== STRUM MACHINE TAB =====
+function renderSM() {
+  function makeGrid(arr, containerId) {
+    const el = document.getElementById(containerId); el.innerHTML = '';
+    arr.forEach(t => {
+      const tile = document.createElement('div'); tile.className = 'sm-tile';
+      const info = document.createElement('div');
+      const bCls = 'key-' + t.key;
+      info.innerHTML = `<div class="sm-tile-name">${t.name}</div><div class="sm-tile-key"><span class="key-badge ${bCls}" style="margin-left:0">${t.key}</span> ${t.type}</div>`;
+      tile.appendChild(info);
+      if (t.sm) {
+        const a = document.createElement('a');
+        a.className = 'sm-open-btn';
+        a.href = `https://strummachine.com/songs?search=${t.sm}`;
+        a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = 'Open ↗';
+        tile.appendChild(a);
+      }
+      el.appendChild(tile);
+    });
+  }
+  makeGrid(REPERTOIRE, 'sm-core-grid');
+  makeGrid(STRETCH, 'sm-stretch-grid');
+}
+
+// ===== TEMPO TAB =====
+function renderTempo() {
+  const wk = getWeekNum();
+  const el = document.getElementById('tempo-rows'); el.innerHTML = '';
+  TEMPOS.forEach((t, i) => {
+    const row = document.createElement('div'); row.className = 'tempo-row';
+    const pct = Math.round((t.bpm / 110) * 100);
+    const isCur = i === wk;
+    row.innerHTML = `
+      <div class="tempo-week ${isCur ? 'current' : ''}">${t.week}${isCur ? ' ←' : ''}</div>
+      <div class="tempo-bar-wrap"><div class="tempo-bar-fill" style="width:${pct}%"></div></div>
+      <div class="tempo-bpm">${t.bpm}</div>
+      <div class="tempo-label">${t.label}</div>`;
+    el.appendChild(row);
+  });
+}
+
+// ===== EXPORT / IMPORT =====
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'delfest-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      if (imported.blocks || imported.ratings || imported.notes) {
+        state = Object.assign({blocks:{},ratings:{},notes:{}}, imported);
+        save();
+        updateToday();
+        alert('Data restored successfully.');
+      } else {
+        alert('That file does not look like a Delfest backup.');
+      }
+    } catch(err) { alert('Could not read that file.'); }
+  };
+  reader.readAsText(file);
+}
+
+// ===== INIT =====
+calWeekOffset = getWeekNum();
+updateToday();
+</script>
+</body>
+</html>
