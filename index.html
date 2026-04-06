@@ -494,15 +494,15 @@ if ('serviceWorker' in navigator) {
         <div class="block-info">
           <div class="block-title">Full-form backup</div>
           <div class="block-desc" id="today-desc">Play backup all the way through the day's piece. Do not stop.</div>
-          <div class="block-meta">10 min · no stopping</div>
+          <div class="block-meta" id="backup-meta">10 min · no stopping</div>
         </div>
       </div>
       <div class="block-row">
         <button class="check-btn" id="cb-a3" onclick="toggle('a3')"></button>
         <div class="block-info">
           <div class="block-title">Jam simulation</div>
-          <div class="block-desc">Say the key aloud. Count off. Backup 2 choruses → simple break → finish clean.</div>
-          <div class="block-meta">5 min · count yourself off</div>
+          <div class="block-desc" id="jam-desc">Say the key aloud. Count off. Play through and stop cleanly.</div>
+          <div class="block-meta" id="jam-meta">5 min · count yourself off</div>
         </div>
       </div>
     </div>
@@ -849,7 +849,115 @@ const TEMPOS = [
   { week:'Delfest',  bpm:105, label:'Target speed' },
 ];
 
-// ===== STATE =====
+// Full-form backup instructions by [week][dow]
+// Weeks 1-2: one tune, full form backup only
+// Weeks 3-4: one tune, backup + cue to add simple break
+// Weeks 5-6: two tunes back to back
+const BACKUP_DRILL = [
+  // Week 1 — one tune, just know the form, no pressure
+  ['Blue Ridge Cabin Home (G) — chop backup all the way through once. Count the bars out loud. Stop if you get lost, find beat 1, re-enter.',
+   'Blue Ridge Cabin Home (G) — full form backup, twice through. Hum the melody over your own chop.',
+   "Old Home Place (A) — full form backup once through. Say 'one two three four' out loud through the whole thing.",
+   "Salt Creek (A) — A part twice, then B part twice. That's one full pass. Do it twice.",
+   'Whiskey Before Breakfast (D) — A part twice, B part twice. One full pass, slow and clean.',
+   'Blue Ridge Cabin Home → Salt Creek — one pass of each, no stopping between tunes. Call the key before each.',
+   'Rest day — no backup drill.'],
+  // Week 2 — one tune, full form, starting to feel solid
+  ['Blue Ridge Cabin Home (G) — two full passes, backup all the way through. No stopping even if you fumble a change.',
+   "Rollin' in My Sweet Baby's Arms (A) — full form backup twice through. Notice where the chorus differs from the verse.",
+   "Old Home Place (A) — two full passes. Try adding one simple kickoff at the top of the second pass.",
+   'Bill Cheatham (A) — A part twice, B part twice = one pass. Do three passes total. Feel the form get automatic.',
+   'Blackberry Blossom (G) — three full passes. This tune is short — use that to your advantage.',
+   "Blue Ridge → Old Home Place → 9 Pound Hammer — one pass each. Say the key out loud before each tune.",
+   'Rest day — no backup drill.'],
+  // Week 3 — one tune, backup + one simple break inserted
+  ['Blue Ridge Cabin Home (G) — two passes backup, then on the third pass take your simple 8-bar break in the middle. Back to backup to finish.',
+   "Old Home Place (A) — two passes backup. Third pass: take your break, then finish with backup. Metronome at 70.",
+   'Salt Creek (A) — three passes. On pass two, insert your A-part break. Return to backup for pass three. 70 bpm.',
+   'Blackberry Blossom (G) — three passes. Insert break on pass two. Return to backup. 70 bpm.',
+   '9 Pound Hammer (C) — two full passes backup. On pass two, insert your vocal-melody break. Finish clean.',
+   "Blue Ridge → Salt Creek — two passes each. Insert break on pass two of each. Call the key before each tune.",
+   'Rest day — no backup drill.'],
+  // Week 4 — one tune, full transition drill, 80 bpm
+  ['Blue Ridge Cabin Home (G) — 4 bars backup → take break → return to backup → stop cleanly. Repeat 3 times. 80 bpm.',
+   "Old Home Place (A) → Rollin' in My Sweet Baby's Arms (A) — one pass of each with break inserted. Back to back. 80 bpm.",
+   'Salt Creek (A) → Bill Cheatham (A) — one pass each with break. No stopping between tunes. 82 bpm.',
+   'Blackberry Blossom (G) → Whiskey Before Breakfast (D) — one pass each with break. Key change between them. 82 bpm.',
+   '9 Pound Hammer (C) — three full passes with break on pass two. Then one pass of Dark Hollow if you know it.',
+   "Blue Ridge → Old Home Place → Salt Creek — full sim each: backup, break, stop cleanly. Say key before each.",
+   'Rest day — no backup drill.'],
+  // Week 5 — two tunes per session, approaching jam tempo
+  ["Blue Ridge Cabin Home → Rollin' in My Sweet Baby's Arms — two passes each, break inserted, clean stop. 90 bpm.",
+   "Old Home Place → Rollin' — two passes each with break. 90 bpm. Notice any hesitation on the turnarounds.",
+   'Salt Creek → Bill Cheatham — two passes each, break on pass two, clean stop. 90–92 bpm.',
+   'Blackberry Blossom → Whiskey Before Breakfast — two passes each with break. 90 bpm. Key change between them.',
+   '9 Pound Hammer → Red Haired Boy (if in repertoire) — two passes each with break. 90 bpm.',
+   "Blue Ridge → Old Home Place → Salt Creek → Blackberry Blossom — one pass each, break inserted, clean stop. Full run at 90+.",
+   'Rest day — no backup drill.'],
+  // Week 6 — two tunes, consolidate at tempo
+  ["Blue Ridge Cabin Home → Rollin' — two passes each, break, clean stop. 95 bpm. No hesitation anywhere.",
+   'Work only the two weakest tunes from Monday. Slow to 80 bpm, rebuild cleanly, then bring back to 90.',
+   "Blue Ridge → Old Home Place → Rollin' → 9 Pound Hammer — one clean pass each with break. Songs only. 90 bpm.",
+   'Salt Creek → Bill Cheatham → Blackberry Blossom → Whiskey — one clean pass each with break. Tunes only. 90 bpm.',
+   "Full core set run: all 8 pieces, one pass each, break inserted, clean stop. 90 bpm. This is your dress rehearsal.",
+   'Short session — two favorite tunes only, 80 bpm, relaxed. End on a good note.',
+   'Rest day — no backup drill.']
+];
+
+// Jam simulation instructions by [week][dow]
+// Weeks 1-2: count off, backup through, stop cleanly — one tune, no break yet
+// Weeks 3-4: count off, backup, take break, stop cleanly
+// Weeks 5-6: two tunes, full sim
+const JAM_DRILL = [
+  // Week 1 — count off and stop cleanly, nothing more
+  ['Blue Ridge Cabin Home (G) — say "this is Blue Ridge in G, one two three four." Chop backup two choruses. Stop cleanly on beat 1.',
+   'Blue Ridge Cabin Home (G) — same as Monday. Focus: does your stop land on beat 1, or do you trail off? Fix the stop.',
+   "Old Home Place (A) — say the key, count off, two choruses backup, stop on beat 1. That's the whole drill.",
+   'Salt Creek (A) — count off, play A part twice then B part twice = one chorus. Stop cleanly. Do it three times.',
+   'Whiskey Before Breakfast (D) — count off in D, one full chorus, stop on beat 1. Three times.',
+   'Blue Ridge then Salt Creek — count off each separately, one chorus each, clean stop each time.',
+   'Rest day.'],
+  // Week 2 — same clean stop, adding kickoff attempt
+  ['Blue Ridge Cabin Home (G) — count off, try a simple kickoff (just the first two notes of the melody), two choruses backup, clean stop.',
+   "Rollin' in My Sweet Baby's Arms (A) — count off, kickoff attempt, two choruses, clean stop. Three times.",
+   'Old Home Place (A) — count off, two choruses backup, clean stop. Focus on the turnaround — does the stop feel natural or rushed?',
+   'Bill Cheatham (A) — count off, one full pass (AABB), clean stop. Do it four times without stopping between reps.',
+   'Blackberry Blossom (G) — count off, one full pass, clean stop. This tune is short so push for four reps.',
+   "Blue Ridge → Old Home Place → 9 Pound Hammer — count off each, one chorus backup, clean stop. Back to back.",
+   'Rest day.'],
+  // Week 3 — backup + simple break + clean stop
+  ['Blue Ridge Cabin Home (G) — count off, two choruses backup, take your 8-bar break, return to backup one chorus, stop cleanly. Three times.',
+   "Old Home Place (A) — same structure: backup, break, backup, stop. 70 bpm. Notice if the re-entry after the break is clean.",
+   'Salt Creek (A) — count off, one full pass backup, take A-part break, one more pass backup, stop cleanly. 70 bpm.',
+   'Blackberry Blossom (G) — same structure. Break goes in the middle. Clean stop at the end. 70 bpm.',
+   '9 Pound Hammer (C) — count off in C, two choruses backup, vocal-melody break, one chorus backup, stop. Three reps.',
+   "Blue Ridge → Salt Creek — full sim on each: backup, break, backup, stop. Count off separately for each tune.",
+   'Rest day.'],
+  // Week 4 — backup + break + stop, two tunes starting to appear
+  ['Blue Ridge Cabin Home (G) — full sim three times at 80 bpm. Each rep: count off, backup, break, stop. Time between reps: just enough to breathe.',
+   "Old Home Place → Rollin' — full sim on each back to back. Count off each separately. 80 bpm.",
+   'Salt Creek → Bill Cheatham — full sim on each. Count off each. 82 bpm. No stopping between tunes.',
+   'Blackberry Blossom → Whiskey Before Breakfast — full sim on each. Key changes between them — call the new key out loud. 82 bpm.',
+   '9 Pound Hammer — full sim three times. Then one sim of Dark Hollow if it is in your repertoire. 80 bpm.',
+   "Blue Ridge → Old Home Place → Salt Creek — full sim on all three back to back. Count off each tune separately. 85 bpm.",
+   'Rest day.'],
+  // Week 5 — two tunes per sim, approaching real jam feel
+  ["Blue Ridge Cabin Home → Rollin' — full sim on both. 90 bpm. Pretend someone just called the tune and you are jumping in.",
+   "Old Home Place → Rollin' — full sim on both. 90 bpm. Work on making the re-entry after the break feel musical, not mechanical.",
+   'Salt Creek → Bill Cheatham — full sim on both. 90–92 bpm. These are your two strongest A tunes — they should feel easy now.',
+   'Blackberry Blossom → Whiskey Before Breakfast — full sim on both. 90 bpm. Call the key change out loud between tunes.',
+   '9 Pound Hammer → Red Haired Boy — full sim on both if Red Haired Boy is ready. Otherwise do 9 Pound Hammer three times. 90 bpm.',
+   "Full mock jam: Blue Ridge → Old Home Place → Salt Creek → Blackberry Blossom → 9 Pound Hammer → Rollin'. Full sim each. 90+ bpm.",
+   'Rest day.'],
+  // Week 6 — consolidate, two tunes, no new skills
+  ["Blue Ridge → Rollin' — full sim on both. 95 bpm. These should feel completely automatic now.",
+   'Two weakest tunes from Monday only — slow to 80 bpm, full sim three times each, rebuild confidence.',
+   "Blue Ridge → Old Home Place → Rollin' → 9 Pound Hammer — full sim each. Songs only. 90 bpm.",
+   'Salt Creek → Bill Cheatham → Blackberry Blossom → Whiskey — full sim each. Tunes only. 90 bpm.',
+   "Full dress rehearsal: all 8 core pieces, full sim each. 90 bpm. This is it.",
+   'Two favorite tunes only, 80 bpm, full sim twice each. Finish feeling good.',
+   'Rest day — no jam drill. Warm hands tomorrow.']
+];
 let state = {};
 try { state = JSON.parse(localStorage.getItem('delfest2026') || '{}'); } catch(e) {}
 if (!state.blocks)  state.blocks = {};
@@ -892,7 +1000,19 @@ function updateToday() {
 
   const info = info0;
   if (info) {
-    document.getElementById('today-desc').textContent = info.data.detail;
+    document.getElementById('today-desc').textContent = BACKUP_DRILL[info.wk][info.dy];
+    document.getElementById('jam-desc').textContent   = JAM_DRILL[info.wk][info.dy];
+
+    // meta labels evolve by week
+    const backupMeta = info.wk < 2 ? '10 min · backup only, no break yet'
+                     : info.wk < 4 ? '10 min · backup + simple break'
+                     : '10 min · two tunes, full sim';
+    const jamMeta    = info.wk < 2 ? '5 min · count off and stop cleanly'
+                     : info.wk < 4 ? '5 min · backup, break, stop cleanly'
+                     : '5 min · two tunes back to back';
+    document.getElementById('backup-meta').textContent = backupMeta;
+    document.getElementById('jam-meta').textContent    = jamMeta;
+
     document.getElementById('focus-box').innerHTML =
       `<strong>${info.week.label}</strong> &mdash; ${info.week.goal}<br>` +
       `<strong>Today:</strong> ${info.data.focus} &mdash; <em>${info.data.detail}</em>`;
